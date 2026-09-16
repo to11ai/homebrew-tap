@@ -1,0 +1,76 @@
+name: Update formula
+
+# The CLI is built in the private monorepo and released into to11ai/to11-cli,
+# so neither of those repositories can write here on a release event. The
+# monorepo's release job sends a repository_dispatch instead, and this renders
+# the formula from the release's own checksums.txt.
+
+on:
+  repository_dispatch:
+    types: [cli-release]
+  # Manual fallback, for a dispatch that was lost or a formula that needs
+  # re-rendering without cutting a release.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Released CLI version to render, e.g. 0.5.0"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  # Serialize, never cancel: two releases in flight must not race to write
+  # Formula/to11.rb, and a cancelled run would leave the tap on the older one.
+  group: update-formula
+  cancel-in-progress: false
+
+jobs:
+  render:
+    # macOS so the formula is gated by the same brew commands a user runs, and
+    # so the install smoke test exercises the darwin_arm64 archive for real.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Render the formula
+        env:
+          VERSION: ${{ github.event.client_payload.version || inputs.version }}
+        run: ./scripts/render-formula.sh "$VERSION"
+
+      - name: Check the formula the way a user would
+        run: |
+          set -euo pipefail
+
+          # brew refuses to install a formula that is not in a tap, so present
+          # the checkout as one. This is the same path `brew tap to11ai/tap`
+          # produces, so the checks below run against the real thing.
+          taps="$(brew --repository)/Library/Taps/to11ai"
+          mkdir -p "$taps"
+          ln -sfn "$GITHUB_WORKSPACE" "$taps/homebrew-tap"
+
+          brew style Formula/to11.rb
+          brew audit --strict --formula to11ai/tap/to11
+          brew install to11ai/tap/to11
+          to11 --version
+          brew test to11
+
+      - name: Commit the formula
+        env:
+          VERSION: ${{ github.event.client_payload.version || inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- Formula/to11.rb; then
+            echo "Formula/to11.rb is already at ${VERSION}; nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "to11-bot"
+          git config user.email "bot@to11.ai"
+          git add Formula/to11.rb
+          git commit -m "to11 v${VERSION}"
+          git push
