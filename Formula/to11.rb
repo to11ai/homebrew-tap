@@ -6,6 +6,11 @@ class To11 < Formula
   homepage "https://github.com/to11ai/to11-cli"
   license :cannot_represent
 
+  livecheck do
+    url :stable
+    strategy :github_latest
+  end
+
   on_macos do
     on_arm do
       url "https://github.com/to11ai/to11-cli/releases/download/v0.5.0/to11_0.5.0_darwin_arm64.tar.gz"
