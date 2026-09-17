@@ -1,0 +1,111 @@
+name: Update formula
+
+# The CLI is built in the private monorepo and released into to11ai/to11-cli,
+# so neither of those repositories can write here on a release event. The
+# monorepo's release job sends a repository_dispatch instead, and this renders
+# the formula from the release's own checksums.txt.
+
+on:
+  repository_dispatch:
+    types: [cli-release]
+  # Manual fallback, for a dispatch that was lost or a formula that needs
+  # re-rendering without cutting a release.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Released CLI version to render, e.g. 0.5.0"
+        required: true
+        type: string
+  # Nothing else exercises the template or the render script. Without this, a
+  # change to either is first run during a release, which is the worst place
+  # to discover it is broken.
+  pull_request:
+    paths:
+      - Formula/**
+      - templates/**
+      - scripts/**
+      - .github/workflows/update-formula.yml
+
+permissions: {}
+
+concurrency:
+  # Releases serialize, never cancel: two in flight must not race to write
+  # Formula/to11.rb, and a cancelled run would leave the tap on the older one.
+  # Pull requests get a group each, so they neither queue behind a release nor
+  # hold one up, and a new push supersedes its own earlier run.
+  group: update-formula-${{ github.event.pull_request.number || 'release' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  render:
+    # macOS so the formula is gated by the same brew commands a user runs, and
+    # so the install smoke test exercises the darwin_arm64 archive for real.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Resolve the version to render
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCHED: ${{ github.event.client_payload.version || inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "$DISPATCHED" ]; then
+            version="$DISPATCHED"
+          else
+            # A pull request carries no version. Render whatever is currently
+            # released, which is the formula this tap is actually serving, so
+            # the checks below run against real archives.
+            tag="$(gh api repos/to11ai/to11-cli/releases/latest --jq .tag_name)"
+            version="${tag#v}"
+          fi
+
+          echo "version=${version}" >>"$GITHUB_OUTPUT"
+          echo "rendering ${version}"
+
+      - name: Render the formula
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/render-formula.sh "$VERSION"
+
+      - name: Check the formula the way a user would
+        run: |
+          set -euo pipefail
+
+          # brew refuses to install a formula that is not in a tap, so present
+          # the checkout as one. This is the same path `brew tap to11ai/tap`
+          # produces, so the checks below run against the real thing.
+          taps="$(brew --repository)/Library/Taps/to11ai"
+          mkdir -p "$taps"
+          ln -sfn "$GITHUB_WORKSPACE" "$taps/homebrew-tap"
+
+          brew style Formula/to11.rb
+          brew audit --strict --formula to11ai/tap/to11
+          brew install to11ai/tap/to11
+          to11 --version
+          brew test to11
+
+      # A pull request only proves the render still works; the formula is
+      # committed by a release, never by a review.
+      - name: Commit the formula
+        if: github.event_name != 'pull_request'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- Formula/to11.rb; then
+            echo "Formula/to11.rb is already at ${VERSION}; nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "to11-bot"
+          git config user.email "bot@to11.ai"
+          git add Formula/to11.rb
+          git commit -m "to11 v${VERSION}"
+          git push

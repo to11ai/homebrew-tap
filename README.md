@@ -5,3 +5,21 @@ brew install to11ai/tap/to11
 ```
 
 Homebrew strips the `homebrew-` prefix, so this repository is the tap `to11ai/tap`.
+
+## Releasing
+
+`Formula/to11.rb` is generated — edit `templates/to11.rb.tmpl`, not the formula.
+
+Each CLI release in the private monorepo sends a `repository_dispatch` here, and
+[`update-formula.yml`](.github/workflows/update-formula.yml) re-renders the formula from
+the release's own `checksums.txt`, checks it with `brew style`, `brew audit --strict` and
+an install smoke test, and commits it. To re-render by hand, run the workflow with a
+version, or locally:
+
+```bash
+./scripts/render-formula.sh 0.5.0
+```
+
+A pull request touching the template, the script or the workflow runs the same render
+and the same checks against the currently released version, so a change is exercised
+before a release depends on it. Only a release commits the result.
