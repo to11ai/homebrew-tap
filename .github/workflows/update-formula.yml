@@ -16,14 +16,25 @@ on:
         description: "Released CLI version to render, e.g. 0.5.0"
         required: true
         type: string
+  # Nothing else exercises the template or the render script. Without this, a
+  # change to either is first run during a release, which is the worst place
+  # to discover it is broken.
+  pull_request:
+    paths:
+      - Formula/**
+      - templates/**
+      - scripts/**
+      - .github/workflows/update-formula.yml
 
 permissions: {}
 
 concurrency:
-  # Serialize, never cancel: two releases in flight must not race to write
+  # Releases serialize, never cancel: two in flight must not race to write
   # Formula/to11.rb, and a cancelled run would leave the tap on the older one.
-  group: update-formula
-  cancel-in-progress: false
+  # Pull requests get a group each, so they neither queue behind a release nor
+  # hold one up, and a new push supersedes its own earlier run.
+  group: update-formula-${{ github.event.pull_request.number || 'release' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   render:
@@ -36,9 +47,30 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
+      - name: Resolve the version to render
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCHED: ${{ github.event.client_payload.version || inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "$DISPATCHED" ]; then
+            version="$DISPATCHED"
+          else
+            # A pull request carries no version. Render whatever is currently
+            # released, which is the formula this tap is actually serving, so
+            # the checks below run against real archives.
+            tag="$(gh api repos/to11ai/to11-cli/releases/latest --jq .tag_name)"
+            version="${tag#v}"
+          fi
+
+          echo "version=${version}" >>"$GITHUB_OUTPUT"
+          echo "rendering ${version}"
+
       - name: Render the formula
         env:
-          VERSION: ${{ github.event.client_payload.version || inputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: ./scripts/render-formula.sh "$VERSION"
 
       - name: Check the formula the way a user would
@@ -58,9 +90,12 @@ jobs:
           to11 --version
           brew test to11
 
+      # A pull request only proves the render still works; the formula is
+      # committed by a release, never by a review.
       - name: Commit the formula
+        if: github.event_name != 'pull_request'
         env:
-          VERSION: ${{ github.event.client_payload.version || inputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
 

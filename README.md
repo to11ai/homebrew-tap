@@ -19,3 +19,7 @@ version, or locally:
 ```bash
 ./scripts/render-formula.sh 0.5.0
 ```
+
+A pull request touching the template, the script or the workflow runs the same render
+and the same checks against the currently released version, so a change is exercised
+before a release depends on it. Only a release commits the result.
