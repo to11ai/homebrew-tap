@@ -16,23 +16,23 @@ class To11 < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/to11ai/to11-cli/releases/download/v0.10.0/to11_0.10.0_darwin_arm64.tar.gz"
-      sha256 "9d3d59c61d3ce4f010a7e3852e885fe5a8019c122367c87010d88589b211a5d0"
+      url "https://github.com/to11ai/to11-cli/releases/download/v0.11.0/to11_0.11.0_darwin_arm64.tar.gz"
+      sha256 "a074fae2ced6c6b58dc2bdbbe89ed3701438c295dab93efa6ddd605cb78b30c6"
     end
     on_intel do
-      url "https://github.com/to11ai/to11-cli/releases/download/v0.10.0/to11_0.10.0_darwin_amd64.tar.gz"
-      sha256 "ab0a23d1165d47614a11567faa1dfec5676e07c1dfad61cbe10268fbde8c8531"
+      url "https://github.com/to11ai/to11-cli/releases/download/v0.11.0/to11_0.11.0_darwin_amd64.tar.gz"
+      sha256 "abe8ea6a522ce871bfcd0fb17fe8869f63c778dae9b0f25584417225a0c1e2bc"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/to11ai/to11-cli/releases/download/v0.10.0/to11_0.10.0_linux_arm64.tar.gz"
-      sha256 "35cc4ea77a4b096205a71c37bfe9aee8a2bb9e6fbb6bd790b96ca9450b7e1d95"
+      url "https://github.com/to11ai/to11-cli/releases/download/v0.11.0/to11_0.11.0_linux_arm64.tar.gz"
+      sha256 "ca19720007f6acd773fd59c3e8f739a7409f70d7593ff7c823273bbe67e9d2a5"
     end
     on_intel do
-      url "https://github.com/to11ai/to11-cli/releases/download/v0.10.0/to11_0.10.0_linux_amd64.tar.gz"
-      sha256 "12f807e18822077909d1f736ed3e3ef5eb1be4d410085321cfd0e040e85ab893"
+      url "https://github.com/to11ai/to11-cli/releases/download/v0.11.0/to11_0.11.0_linux_amd64.tar.gz"
+      sha256 "399212390ea7c9554421e65f990533d158ac0847eac432e827d01acc429acabb"
     end
   end
 
